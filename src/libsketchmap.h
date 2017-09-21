@@ -26,11 +26,11 @@ template <typename T> using ndarray =
 /// The gradient is not needed for pointwise global or stochastic minimizers.
 template <typename T>
 struct ChiOptions {
-    ChiOptions(bool use_switch, bool use_weights, bool use_gradient, bool use_hessian, bool use_mix, T imix):
+    ChiOptions(bool use_switch, bool use_weights, bool use_gradient, bool use_mix, T imix):
             use_switch(use_switch), use_weights(use_weights),
-            use_gradient(use_gradient), use_hessian(use_hessian), use_mix(use_mix), imix(imix) {}
+            use_gradient(use_gradient), use_mix(use_mix), imix(imix) {}
 
-    bool use_switch, use_weights, use_gradient, use_hessian, use_mix;
+    bool use_switch, use_weights, use_gradient, use_mix;
     T imix;
 };
 
@@ -38,9 +38,9 @@ struct ChiOptions {
 /// I am doing this in a struct instead of a simple bool so that the interface is consistent
 /// with the `StressFunction` class and to be able to easily extend it in the future.
 struct SwitchOptions {
-    explicit SwitchOptions(bool use_gradient, bool use_hessian): use_gradient(use_gradient), use_hessian(use_hessian) {}
+    explicit SwitchOptions(bool use_gradient): use_gradient(use_gradient) {}
 
-    bool use_gradient, use_hessian;
+    bool use_gradient;
 };
 
 /// A struct to conveniently store grid data for pointwise global optimization.
@@ -77,19 +77,11 @@ public:
         if (options.use_gradient) {
             jacobian = b * mx * af::pow(mx + af::constant(1.0, x.dims()), negbdivamin1) / x;
         }
-        if (options.use_hessian) {
-            hessian = twopowadivbm1 * b / (sigma * sigma) * ((a - 1.0) * af::pow(mx, negbdivamin1) * af::pow(xrsig, a - 2.0) +
-                    twopowadivbm1 * (-b - a) * af::pow(mx, negbdivamin1 - 1.0) * af::pow(xrsig, 2.0 * a - 2.0));
-        }
         return 1. - af::pow(1 + mx, static_cast<T>(negbdiva));
     }
 
     U &getJacobian() {
         return jacobian;
-    }
-
-    U &getHessian() {
-        return hessian;
     }
 
 private:
@@ -98,7 +90,7 @@ private:
     int a, b;
 
     // Derivative
-    U jacobian, hessian;
+    U jacobian;
 
     // Precalculate constants
     T rsigma, twopowadivbm1, negbdivamin1;
@@ -159,12 +151,6 @@ public:
         return jacpy;
     }
 
-    ndarray<T> getSingleHessian() {
-        T *hes = single_hessian.host<T>();
-        ndarray<T> hespy({static_cast<size_t>(nldim * nldim)}, hes);
-        return hespy;
-    }
-
     std::string device(Backend backend) {
         if (backend == Backend::CUDA) {
             af::setBackend(AF_BACKEND_CUDA);
@@ -184,7 +170,7 @@ private:
     // the finite difference method because of the nature of the switching function
     // (i.e. mapping close points "together", or at least closer than the machine epsilon),
     // the ill-conditioned nature of the scoring function, and the use of 32 bit floating point arithmetic.
-    af::array jacobian, single_jacobian, single_hessian;
+    af::array jacobian, single_jacobian;
 
     // Constant data
     af::array xhigh, weights, square_weights, xhighd, fxhighd;
@@ -221,7 +207,7 @@ StressFunction<T>::StressFunction(const ndarray<T> _xhigh, const ndarray<T> _wei
 
     // Init switching function options, we don't need the gradient for the
     // high-dimensional distance matrix (it's constant).
-    SwitchOptions so(false, false);
+    SwitchOptions so(false);
 
     // Init switching functions
     sigmoid_low = Sigmoid<T, af::array>(_sigma_low, _a_low, _b_low);
@@ -273,7 +259,7 @@ StressFunction<T>::StressFunction(const af::array &_xhigh,
 
     // Init switching function options, we don't need the gradient for the
     // high-dimensional distance matrix (it's constant).
-    SwitchOptions so(false, false);
+    SwitchOptions so(false);
 
     // Create square weights array, where each element is the product of weight i and j.
     // This makes subsequent operations easier and avoids additional broadcasting / tiling.
@@ -296,7 +282,7 @@ StressFunction<T>::StressFunction(const af::array &_xhigh,
 template <typename T>
 T StressFunction<T>::eval(af::array &x, ChiOptions<T> options) {
     // Create switching function options
-    SwitchOptions so(options.use_gradient, false);
+    SwitchOptions so(options.use_gradient);
 
     // Compute low dimensional distance matrix
     af::array ldiff(nldim, npoints, npoints);
@@ -413,7 +399,7 @@ ndarray<T> StressFunction<T>::grid_search_py(ndarray<T> _x,
 template <typename T>
 af::array StressFunction<T>::eval_multi(af::array &x, af::array &p, ChiOptions<T> options) {
     // Create switching function options
-    SwitchOptions so(options.use_gradient, options.use_hessian);
+    SwitchOptions so(options.use_gradient);
 
     // Compute low dimensional distance vector
     af::array ldiff(nldim, npoints);
@@ -498,7 +484,7 @@ template <typename T>
 T StressFunction<T>::eval_single(unsigned int index, af::array &xi,
                                  const af::array &x, ChiOptions<T> options) {
     // Create switching function options
-    SwitchOptions so(options.use_gradient, options.use_hessian);
+    SwitchOptions so(options.use_gradient);
 
     // Compute low dimensional distance vector
     af::array ldiff(nldim, npoints);
@@ -563,50 +549,6 @@ T StressFunction<T>::eval_single(unsigned int index, af::array &xi,
             single_jacobian *= fact;
         } else {
             single_jacobian *= rweightsum;
-        }
-    }
-
-    // Probably wrong
-    if (options.use_hessian) {
-        af::array l0diff2 = ldiff.row(0) * ldiff.row(0);
-        af::array l1diff2 = ldiff.row(1) * ldiff.row(1);
-        af::array l01diff2 = ldiff.row(0) * ldiff.row(1);
-        af::array rxlowd = 1.0 / xlowd;
-        af::array rxlowd2 = rxlowd * rxlowd;
-        af::array hessian = af::constant(0.0, 4);
-        af::array fhessian = af::constant(0.0, 4);
-        single_hessian = af::constant(0.0, 4);
-
-        if (options.use_weights) {
-            l0diff2 *= af::reorder(square_weights.col(index), 0, 2, 1);
-            l1diff2 *= af::reorder(square_weights.col(index), 0, 2, 1);
-            l01diff2 *= af::reorder(square_weights.col(index), 0, 2, 1);
-        }
-
-        if (options.use_switch || options.use_mix) {
-            af::array fhess1 = flhdiff * sigmoid_low.getJacobian() * af::pow(xlowd, -2.5);
-            af::array fhess2 = flhdiff * sigmoid_low.getJacobian() * rxlowd;
-            af::array fhess3 = sigmoid_low.getJacobian() * sigmoid_low.getJacobian() * rxlowd2;
-            af::array fhess4 = flhdiff * sigmoid_low.getHessian() * rxlowd2;
-            fhessian(0) = af::sum(l0diff2 * (fhess1 + fhess3 - fhess4) - fhess2, 1, 0.0);
-            fhessian(3) = af::sum(l1diff2 * (fhess1 + fhess3 - fhess4) - fhess2, 1, 0.0);
-            fhessian(1) = fhessian(2) = af::sum(l01diff2 * (fhess1 + fhess3 - fhess4), 1, 0.0);
-        }
-
-        if (!options.use_switch || options.use_mix) {
-            af::array hess1 = lhdiff * af::pow(xlowd, -2.5);
-            af::array hess3 = lhdiff * rxlowd;
-            hessian(0) = af::sum(l0diff2 * (hess1 + hess3) - rxlowd2, 1, 0.0);
-            hessian(3) = af::sum(l1diff2 * (hess1 + hess3) - rxlowd2, 1, 0.0);
-            hessian(1) = hessian(2) = af::sum(l01diff2 * (hess1 + hess3), 1, 0.0);
-        }
-
-        single_hessian = (1.0 - options.imix) * fhessian + options.imix * hessian;
-
-        if (!options.use_weights) {
-            single_hessian *= 2.0 * fact;
-        } else {
-            single_hessian *= rweightsum;
         }
     }
 

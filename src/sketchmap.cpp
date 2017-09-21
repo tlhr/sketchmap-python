@@ -14,12 +14,11 @@ PYBIND11_MODULE(sketchmap, m) {
     m.doc() = "Sketchmap kernels";
 
     py::class_<ChiOptions<fptype>>(m, "ChiOptions")
-            .def(py::init<bool, bool, bool, bool, bool, fptype>(), "Create an evaluator options object",
-                 py::arg("use_switch"), py::arg("use_weights"), py::arg("use_gradient"), py::arg("use_hessian"), py::arg("use_mix"), py::arg("imix"))
+            .def(py::init<bool, bool, bool, bool, fptype>(), "Create an evaluator options object",
+                 py::arg("use_switch"), py::arg("use_weights"), py::arg("use_gradient"), py::arg("use_mix"), py::arg("imix"))
             .def_readwrite("use_switch", &ChiOptions<fptype>::use_switch)
             .def_readwrite("use_weights", &ChiOptions<fptype>::use_weights)
             .def_readwrite("use_gradient", &ChiOptions<fptype>::use_gradient)
-            .def_readwrite("use_hessian", &ChiOptions<fptype>::use_hessian)
             .def_readwrite("use_mix", &ChiOptions<fptype>::use_mix)
             .def_readwrite("imix", &ChiOptions<fptype>::imix);
 
@@ -41,18 +40,17 @@ PYBIND11_MODULE(sketchmap, m) {
             .value("OpenCL", StressFunction<fptype>::Backend::OpenCL)
             .value("CUDA", StressFunction<fptype>::Backend::CUDA);
     sf.def(py::init<py::array_t<fptype>, py::array_t<fptype>, fptype, fptype, int, int, int, int, StressFunction<fptype>::Metric, Grid<fptype>>())
-    .def_property_readonly("jacobian", &StressFunction<fptype>::getJacobian)
+            .def_property_readonly("jacobian", &StressFunction<fptype>::getJacobian)
             .def_property_readonly("single_jacobian", &StressFunction<fptype>::getSingleJacobian)
-            .def_property_readonly("single_hessian", &StressFunction<fptype>::getSingleHessian)
             .def("eval", &StressFunction<fptype>::eval_py, "Evaluate the stress of the given points",
                  py::arg("x"), py::arg("options"))
             .def("grid_search", &StressFunction<fptype>::grid_search_py, "Minimize per point score using brute force",
                  py::arg("x"), py::arg("index"), py::arg("options"))
             .def("device", &StressFunction<fptype>::device, "Set backend and display info")
-    .def("eval_single", &StressFunction<fptype>::eval_single_py, "Evaluate the stress of the given point with all other points",
-         py::arg("index"), py::arg("xi"), py::arg("x"), py::arg("options"))
-    .def("eval_multi", &StressFunction<fptype>::eval_multi_py, "Evaluate the stress of the given points per point",
-         py::arg("x"), py::arg("p"), py::arg("options"));
+            .def("eval_single", &StressFunction<fptype>::eval_single_py, "Evaluate the stress of the given point with all other points",
+                 py::arg("index"), py::arg("xi"), py::arg("x"), py::arg("options"))
+            .def("eval_multi", &StressFunction<fptype>::eval_multi_py, "Evaluate the stress of the given points per point",
+                 py::arg("x"), py::arg("p"), py::arg("options"));
 }
 
 #pragma clang diagnostic pop
