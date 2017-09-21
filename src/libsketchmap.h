@@ -106,14 +106,6 @@ public:
     enum class Metric {Euclidean, Spherical, Periodic};
     enum class Backend {CPU, OpenCL, CUDA};
 
-    // Internal constructor
-    StressFunction(const af::array &_xhigh,
-                   const af::array &_weights,
-                   Sigmoid<T, af::array> _sigmoid_low,
-                   Sigmoid<T, af::array> _sigmoid_high,
-                   Metric _distance_metric,
-                   Grid<T> _grid);
-
     // Constructor callable from python
     StressFunction(ndarray<T> _xhigh, ndarray<T> _weights,
                    T _sigma_low, T _sigma_high,
@@ -231,49 +223,6 @@ StressFunction<T>::StressFunction(const ndarray<T> _xhigh, const ndarray<T> _wei
     // Precalculate high dimensional distance matrix and switched version
     {
         af::array dummy(nhdim, npoints, npoints);
-        xhighd = dist_full(xhigh, dummy);
-    }
-    fxhighd = sigmoid_high.eval(xhighd, so);
-}
-
-// TODO: Probably permanently dead code
-template <typename T>
-StressFunction<T>::StressFunction(const af::array &_xhigh,
-                                  const af::array &_weights,
-                                  Sigmoid<T, af::array> _sigmoid_low,
-                                  Sigmoid<T, af::array> _sigmoid_high,
-                                  Metric _distance_metric,
-                                  Grid<T> _grid):
-    xhigh(_xhigh),
-    weights(_weights),
-    sigmoid_low(_sigmoid_low),
-    sigmoid_high(_sigmoid_high),
-    distance_metric(_distance_metric),
-    nldim(2),
-    grid(_grid)
-{
-    npoints = xhigh.dims(0);
-    nhdim = xhigh.dims(1);
-    ntotal_low = npoints * nldim;
-    fact = 1.0 / (npoints * (npoints - 1.0));
-
-    // Init switching function options, we don't need the gradient for the
-    // high-dimensional distance matrix (it's constant).
-    SwitchOptions so(false);
-
-    // Create square weights array, where each element is the product of weight i and j.
-    // This makes subsequent operations easier and avoids additional broadcasting / tiling.
-    {
-        // Broadcast weight arrays into square matrices, one is transposed
-        const af::array ww = af::tile(weights, 1, (unsigned)npoints);
-        const af::array wwt = af::reorder(ww, 0, 1);
-        square_weights = ww * wwt;
-        rweightsum = 1.0 / af::sum<T>(weights);
-    }
-
-    // Precalculate high dimensional distance matrix and switched version
-    {
-        af::array dummy(nhdim, npoints);
         xhighd = dist_full(xhigh, dummy);
     }
     fxhighd = sigmoid_high.eval(xhighd, so);
