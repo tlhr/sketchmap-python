@@ -15,8 +15,6 @@
 #define C_INV_TWOPI 0.1591549431
 #define C_TWOPI 6.2831853072
 
-//#define DEBUG
-
 namespace py = pybind11;
 
 // Fortran style numpy array
@@ -125,7 +123,7 @@ public:
                    Grid<T> _grid);
 
     // Constructor callable from python
-    StressFunction(py::array_t<T> _xhigh, py::array_t<T> _weights,
+    StressFunction(ndarray<T> _xhigh, ndarray<T> _weights,
                    T _sigma_low, T _sigma_high,
                    int _a_low, int _a_high, int _b_low, int _b_high,
                    Metric _distance_metric,
@@ -137,7 +135,7 @@ public:
                   const af::array &x, ChiOptions<T> options);
     af::array eval_multi(af::array &x, af::array &p, ChiOptions<T> options);
 
-    py::array_t<T> grid_search_py(py::array_t<T> _x, unsigned index, ChiOptions<T> options);
+    ndarray<T> grid_search_py(ndarray<T> _x, unsigned index, ChiOptions<T> options);
 
     // Pythonized scorers
     T eval_py(ndarray<T> _x, ChiOptions<T> options);
@@ -145,25 +143,25 @@ public:
                      ndarray<T> _xi,
                      ndarray<T> _x,
                      ChiOptions<T> options);
-    py::array_t<T> eval_multi_py(py::array_t<T> _x, py::array_t<T> _p, ChiOptions<T> options);
+    ndarray<T> eval_multi_py(ndarray<T> _x, ndarray<T> _p, ChiOptions<T> options);
 
-    py::array_t<T> getJacobian() {
+    ndarray<T> getJacobian() {
         // Copy data from device to host (i.e. the location of the allocated py_array)
         T *jac = jacobian.host<T>();
-        py::array_t<T> jacpy({static_cast<size_t>(ntotal_low)}, jac);
+        ndarray<T> jacpy({static_cast<size_t>(ntotal_low)}, jac);
         return jacpy;
     }
 
-    py::array_t<T> getSingleJacobian() {
+    ndarray<T> getSingleJacobian() {
         // Copy data from device to host (i.e. the location of the allocated py_array)
         T *jac = single_jacobian.host<T>();
-        py::array_t<T> jacpy({static_cast<size_t>(nldim)}, jac);
+        ndarray<T> jacpy({static_cast<size_t>(nldim)}, jac);
         return jacpy;
     }
 
-    py::array_t<T> getSingleHessian() {
+    ndarray<T> getSingleHessian() {
         T *hes = single_hessian.host<T>();
-        py::array_t<T> hespy({static_cast<size_t>(nldim * nldim)}, hes);
+        ndarray<T> hespy({static_cast<size_t>(nldim * nldim)}, hes);
         return hespy;
     }
 
@@ -207,7 +205,7 @@ private:
 };
 
 template <typename T>
-StressFunction<T>::StressFunction(const py::array_t<T> _xhigh, const py::array_t<T> _weights,
+StressFunction<T>::StressFunction(const ndarray<T> _xhigh, const ndarray<T> _weights,
                                   T _sigma_low, T _sigma_high,
                                   int _a_low, int _a_high, int _b_low, int _b_high,
                                   Metric _distance_metric,
@@ -376,7 +374,7 @@ T StressFunction<T>::eval(af::array &x, ChiOptions<T> options) {
 }
 
 template <typename T>
-py::array_t<T> StressFunction<T>::grid_search_py(py::array_t<T> _x,
+ndarray<T> StressFunction<T>::grid_search_py(ndarray<T> _x,
                                                  unsigned index,
                                                  ChiOptions<T> options) {
     const af::array x = af::reorder(af::array(_x.shape(0), _x.shape(1), _x.data(0)), 1, 0);
@@ -406,7 +404,7 @@ py::array_t<T> StressFunction<T>::grid_search_py(py::array_t<T> _x,
 
     // Copy new array back to host and convert to numpy compatible format.
     T *_uv = uv.host<T>();
-    py::array_t<T> xi_numpy({static_cast<size_t>(nldim)}, _uv);
+    ndarray<T> xi_numpy({static_cast<size_t>(nldim)}, _uv);
     return xi_numpy;
 }
 
@@ -632,12 +630,12 @@ T StressFunction<T>::eval_single_py(unsigned int index,
 }
 
 template <typename T>
-py::array_t<T> StressFunction<T>::eval_multi_py(py::array_t<T> _x, py::array_t<T> _p, ChiOptions<T> options) {
+ndarray<T> StressFunction<T>::eval_multi_py(ndarray<T> _x, ndarray<T> _p, ChiOptions<T> options) {
     af::array x = af::reorder(af::array(_x.shape(0), _x.shape(1), _x.data(0)), 1, 0);
     af::array p = af::reorder(af::array(_p.shape(0), _p.shape(1), _p.data(0)), 1, 0);
     af::array res = eval_multi(x, p, options);
     T *_res = res.host<T>();
-    py::array_t<T> scores_py({static_cast<size_t>(npoints)}, _res);
+    ndarray<T> scores_py({static_cast<size_t>(npoints)}, _res);
     return scores_py;
 }
 
